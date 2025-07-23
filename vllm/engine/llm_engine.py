@@ -1578,6 +1578,7 @@ class LLMEngine:
 
         # KV Cache Usage in %
         num_total_gpu = self.cache_config.num_gpu_blocks
+        num_free_gpu = 0
         gpu_cache_usage_sys = 0.
         if num_total_gpu is not None:
             num_free_gpu = sum(
@@ -1586,6 +1587,7 @@ class LLMEngine:
             gpu_cache_usage_sys = 1.0 - (num_free_gpu / num_total_gpu)
 
         num_total_cpu = self.cache_config.num_cpu_blocks
+        num_free_cpu = 0
         cpu_cache_usage_sys = 0.
         if num_total_cpu is not None and num_total_cpu > 0:
             num_free_cpu = sum(
@@ -1603,6 +1605,8 @@ class LLMEngine:
         # Iteration stats
         num_prompt_tokens_iter = 0
         num_generation_tokens_iter = 0
+        num_prompt_requests_iter = 0
+        num_generation_requests_iter = 0
         time_to_first_tokens_iter: List[float] = []
         time_per_output_tokens_iter: List[float] = []
         num_preemption_iter = (0 if scheduler_outputs is None else
@@ -1616,6 +1620,7 @@ class LLMEngine:
         num_generation_tokens_requests: List[int] = []
         n_requests: List[int] = []
         finished_reason_requests: List[str] = []
+        actual_num_batched_tokens = 0
 
         # NOTE: This loop assumes prefill seq_groups are before
         # decode seq_groups in scheduled_seq_groups.
@@ -1658,6 +1663,7 @@ class LLMEngine:
                     if not seq_group.is_prefill():
                         latency = seq_group.get_last_latency(now)
                         time_to_first_tokens_iter.append(latency)
+                        num_prompt_requests_iter += 1
 
                         # One generation token per finished prefill.
                         num_generation_tokens_from_prefill_groups += (
@@ -1666,6 +1672,7 @@ class LLMEngine:
                     # TPOTs.
                     latency = seq_group.get_last_latency(now)
                     time_per_output_tokens_iter.append(latency)
+                    num_generation_requests_iter += 1
 
                 # Because of chunked prefill, we can have a single sequence
                 # group that does multiple prompt_runs. To prevent logging
@@ -1718,6 +1725,10 @@ class LLMEngine:
             #   KV Cache Usage in %
             gpu_cache_usage_sys=gpu_cache_usage_sys,
             cpu_cache_usage_sys=cpu_cache_usage_sys,
+            num_gpu_total_block=num_total_gpu,
+            num_gpu_free_block=num_free_gpu,
+            num_cpu_total_block=num_total_cpu,
+            num_cpu_free_block=num_free_cpu,
             #   Prefix Cache Hit Rate
             cpu_prefix_cache_hit_rate=cpu_prefix_cache_hit_rate,
             gpu_prefix_cache_hit_rate=gpu_prefix_cache_hit_rate,
@@ -1725,6 +1736,8 @@ class LLMEngine:
             # Iteration stats
             num_prompt_tokens_iter=num_prompt_tokens_iter,
             num_generation_tokens_iter=num_generation_tokens_iter,
+            num_prompt_requests_iter=num_prompt_requests_iter,
+            num_generation_requests_iter=num_generation_requests_iter,
             time_to_first_tokens_iter=time_to_first_tokens_iter,
             time_per_output_tokens_iter=time_per_output_tokens_iter,
             spec_decode_metrics=spec_decode_metrics,
@@ -1738,6 +1751,7 @@ class LLMEngine:
             num_generation_tokens_requests=num_generation_tokens_requests,
             n_requests=n_requests,
             finished_reason_requests=finished_reason_requests,
+            actual_num_batched_tokens=actual_num_batched_tokens,
         )
 
     def add_lora(self, lora_request: LoRARequest) -> bool:

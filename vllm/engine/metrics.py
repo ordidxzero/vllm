@@ -3,6 +3,7 @@ from typing import Counter as CollectionsCounter
 from typing import Dict, List, Optional, Type, Union, cast
 
 import numpy as np
+from time import perf_counter_ns
 import prometheus_client
 
 from vllm.engine.metrics_types import (StatLoggerBase, Stats,
@@ -320,6 +321,10 @@ def get_throughput(tracked_stats: List[int], now: float,
 
 class LoggingStatLogger(StatLoggerBase):
     """LoggingStatLogger is used in LLMEngine to log to Stdout."""
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.id = 0
+        self.prev_now = None
 
     def log(self, stats: Stats) -> None:
         """Called by LLMEngine.
@@ -333,7 +338,7 @@ class LoggingStatLogger(StatLoggerBase):
         self.maybe_update_spec_decode_metrics(stats)
 
         # Log locally every local_interval seconds.
-        if local_interval_elapsed(stats.now, self.last_local_log,
+        if True or local_interval_elapsed(stats.now, self.last_local_log,
                                   self.local_interval):
             # Compute summary metrics for tracked stats (and log them
             # to promethus if applicable).
@@ -344,14 +349,26 @@ class LoggingStatLogger(StatLoggerBase):
                 self.num_generation_tokens,
                 now=stats.now,
                 last_log=self.last_local_log)
+            
+            now = perf_counter_ns()
+            latency = now - self.prev_now if self.prev_now is not None else 0
+
+            self.prev_now = now
 
             # Log to stdout.
             logger.info(
+                "iter: %07d, "
                 "Avg prompt throughput: %.1f tokens/s, "
                 "Avg generation throughput: %.1f tokens/s, "
                 "Running: %d reqs, Swapped: %d reqs, "
                 "Pending: %d reqs, GPU KV cache usage: %.1f%%, "
-                "CPU KV cache usage: %.1f%%.",
+                "CPU KV cache usage: %.1f%%, "
+                "GPU Total Block: %d, GPU Free Block: %d, CPU Total Block: %d, CPU Free Block: %d, "
+                "actual_num_batched_tokens: %d, "
+                "Prompt stage: %d reqs, Generation stage: %d reqs, Preemption: %d reqs, "
+                "Generation: %d tokens, "
+                "Latency: %.2f",
+                self.id,
                 prompt_throughput,
                 generation_throughput,
                 stats.num_running_sys,
@@ -359,7 +376,18 @@ class LoggingStatLogger(StatLoggerBase):
                 stats.num_waiting_sys,
                 stats.gpu_cache_usage_sys * 100,
                 stats.cpu_cache_usage_sys * 100,
+                stats.num_gpu_total_block,
+                stats.num_gpu_free_block,
+                stats.num_cpu_total_block,
+                stats.num_cpu_free_block,
+                stats.actual_num_batched_tokens,
+                stats.num_prompt_requests_iter,
+                stats.num_generation_requests_iter,
+                stats.num_preemption_iter,
+                stats.num_generation_tokens_iter,
+                latency / 1_000_000
             )
+            self.id += 1
             if (stats.cpu_prefix_cache_hit_rate >= 0
                     or stats.gpu_prefix_cache_hit_rate >= 0):
                 logger.info(

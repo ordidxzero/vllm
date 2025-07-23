@@ -32,6 +32,10 @@ class Stats:
     #   KV Cache Usage in %
     gpu_cache_usage_sys: float
     cpu_cache_usage_sys: float
+    num_gpu_total_block: int
+    num_gpu_free_block: int
+    num_cpu_total_block: int
+    num_cpu_free_block: int
     #   Prefix caching block hit rate
     cpu_prefix_cache_hit_rate: float
     gpu_prefix_cache_hit_rate: float
@@ -39,6 +43,8 @@ class Stats:
     # Iteration stats (should have _iter suffix)
     num_prompt_tokens_iter: int
     num_generation_tokens_iter: int
+    num_prompt_requests_iter: int
+    num_generation_requests_iter: int
     time_to_first_tokens_iter: List[float]
     time_per_output_tokens_iter: List[float]
     num_preemption_iter: int
@@ -51,6 +57,7 @@ class Stats:
     num_generation_tokens_requests: List[int]
     n_requests: List[int]
     finished_reason_requests: List[str]
+    actual_num_batched_tokens: int
 
     spec_decode_metrics: Optional["SpecDecodeWorkerMetrics"] = None
 

@@ -208,20 +208,30 @@ def sample_hf_requests(
                            name=dataset_subset,
                            split=dataset_split,
                            streaming=True)
-    assert "conversations" in dataset.features, (
-        "HF Dataset must have 'conversations' column.")
-    filtered_dataset = dataset.shuffle().filter(
-        lambda x: len(x["conversations"]) >= 2)
+    if dataset_path != 'squeezebits/dynamic_sonnet_llama3':
+        assert "conversations" in dataset.features, (
+            "HF Dataset must have 'conversations' column.")
+        filtered_dataset = dataset.shuffle().filter(
+            lambda x: len(x["conversations"]) >= 2)
+    else:
+        filtered_dataset = dataset.shuffle()
     sampled_requests: List[Tuple[str, int, int, Dict[str,
                                                      Collection[str]]]] = []
     for data in filtered_dataset:
         if len(sampled_requests) == num_requests:
             break
+        
+        prompt = ''
+        completion = ''
 
+        if dataset_path == 'squeezebits/dynamic_sonnet_llama3':
+            prompt = data['formatted_input'][0]['content']
+        else:
+            prompt = data["conversations"][0]["value"]
+            completion = data["conversations"][1]["value"]
+        
         # Tokenize the prompts and completions.
-        prompt = data["conversations"][0]["value"]
         prompt_token_ids = tokenizer(prompt).input_ids
-        completion = data["conversations"][1]["value"]
         completion_token_ids = tokenizer(completion).input_ids
         prompt_len = len(prompt_token_ids)
         output_len = len(completion_token_ids
